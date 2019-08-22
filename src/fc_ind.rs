@@ -103,15 +103,13 @@ impl FractionalCascadingMultiListSearcher {
                 self.nodes[upper_bound - 1].orig_list_upper_bound
             };
 
-            upper_bound = if upper_bound == curr_list_begin {
-                if i + 1 < out.len() {
+            if i + 1 < out.len() {
+                upper_bound = if upper_bound == curr_list_begin {
                     self.list_ranges[i + 1].0
                 } else {
-                    0
-                }
-            } else {
-                self.nodes[upper_bound - 1].prev_list_upper_bound
-            };
+                    self.nodes[upper_bound - 1].prev_list_upper_bound
+                };
+            }
         }
     }
 }

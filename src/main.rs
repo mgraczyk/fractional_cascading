@@ -7,15 +7,12 @@ use fc_ind::*;
 use naive::*;
 use rand;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
 use std::time::Instant;
-use superslice::*;
 
 #[cfg(test)]
 mod tests {
     extern crate test;
     use super::*;
-    use test::Bencher;
 
     #[test]
     fn create_without_crashing_naive() {
@@ -181,19 +178,77 @@ mod tests {
     }
 
     fn create_random_vector<
-        T: rand::distributions::uniform::SampleUniform + Copy,
+        T: rand::distributions::uniform::SampleUniform + Copy + PartialOrd,
         R: Rng + ?Sized,
     >(
         min: T,
         max: T,
         n: usize,
         rng: &mut R,
+        sorted: bool,
     ) -> Vec<T> {
         let mut vec: Vec<T> = Vec::with_capacity(n);
         for _ in 0..vec.capacity() {
             vec.push(rng.gen_range(min, max));
         }
+
+        if sorted {
+            vec.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        }
         vec
+    }
+
+    fn check_keys_are_correct<T: PartialOrd + std::fmt::Debug + Copy>(
+        data: &Vec<Vec<T>>,
+        x: T,
+        result: &Vec<usize>,
+    ) {
+        for (list, x_out) in data.iter().zip(result) {
+            if *x_out >= list.len() {
+                assert_eq!(*x_out, list.len());
+                assert!(list[list.len() - 1] <= x);
+            } else {
+                assert!(x < list[*x_out]);
+                if *x_out > 0 {
+                    assert!(list[*x_out - 1] <= x);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn check_random_fc() {
+        let mut rng = rand::thread_rng();
+
+        let num_keys = 10000;
+        let num_lists = 10;
+        let min_list_len = 1000;
+        let max_list_len = 10000;
+
+        let data = (0..num_lists)
+            .map(|_| {
+                create_random_vector(
+                    -100.,
+                    100.,
+                    if min_list_len < max_list_len {
+                        rng.gen_range(min_list_len, max_list_len)
+                    } else {
+                        min_list_len
+                    },
+                    &mut rng,
+                    true,
+                )
+            })
+            .collect();
+        let searcher = FractionalCascadingMultiListSearcher::new(&data);
+
+        let mut result = vec![0; data.len()];
+        let search_keys = create_random_vector(-100., 100., num_keys, &mut rng, false);
+
+        for x in search_keys.iter() {
+            searcher.search(*x, &mut result);
+            check_keys_are_correct(&data, *x, &result);
+        }
     }
 
     #[test]
@@ -201,6 +256,7 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         let num_iter = 100;
+        let num_keys = 10000;
         let num_lists = 10;
         let min_list_len = 100000;
         let max_list_len = 1000000;
@@ -212,13 +268,14 @@ mod tests {
                     100.,
                     rng.gen_range(min_list_len, max_list_len),
                     &mut rng,
+                    true,
                 )
             })
             .collect();
         let searcher = NaiveMultiListSearcher::new(&data);
 
         let mut result = vec![0; data.len()];
-        let search_keys = create_random_vector(-100., 100., 10000, &mut rng);
+        let search_keys = create_random_vector(-100., 100., num_keys, &mut rng, false);
         searcher.search(search_keys[0], &mut result);
         searcher.search(search_keys[search_keys.len() - 1], &mut result);
 
@@ -238,6 +295,7 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         let num_iter = 100;
+        let num_keys = 10000;
         let num_lists = 10;
         let min_list_len = 100000;
         let max_list_len = 1000000;
@@ -249,13 +307,14 @@ mod tests {
                     100.,
                     rng.gen_range(min_list_len, max_list_len),
                     &mut rng,
+                    true,
                 )
             })
             .collect();
         let searcher = FractionalCascadingMultiListSearcher::new(&data);
 
         let mut result = vec![0; data.len()];
-        let search_keys = create_random_vector(-100., 100., 10000, &mut rng);
+        let search_keys = create_random_vector(-100., 100., num_keys, &mut rng, false);
         searcher.search(search_keys[0], &mut result);
         searcher.search(search_keys[search_keys.len() - 1], &mut result);
 
